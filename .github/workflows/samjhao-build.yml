@@ -50,7 +50,7 @@ jobs:
           cp -r /tmp/samjhao_assets assets
           rm -f test/widget_test.dart
 
-      - name: Configure package and Android 16 target
+      - name: Configure app and fix source
         working-directory: /tmp/samjhao
         run: |
           python3 - <<'PY'
@@ -73,6 +73,14 @@ jobs:
           if 'android.permission.INTERNET' not in t:
               t = t.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>')
           m.write_text(t)
+
+          d = Path('lib/main.dart')
+          src = d.read_text()
+          old = 'onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ResultScreen(result: r)))))),'
+          new = 'onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ResultScreen(result: r))))))),'
+          if old not in src:
+              raise SystemExit('Expected History navigation source pattern not found')
+          d.write_text(src.replace(old, new, 1))
           PY
 
       - name: Resolve packages and generate icon
