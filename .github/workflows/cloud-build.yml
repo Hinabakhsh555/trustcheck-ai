@@ -33,7 +33,7 @@ jobs:
           cp /tmp/main.dart lib/main.dart
           rm -f test/widget_test.dart
 
-      - name: Configure Android API 36
+      - name: Configure Android API 36 and release build
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -42,6 +42,9 @@ jobs:
           s = s.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
           s = s.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
           s = s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          marker = 'signingConfig = signingConfigs.getByName("debug")'
+          if marker in s:
+              s = s.replace(marker, marker + '\n            isMinifyEnabled = false\n            isShrinkResources = false')
           p.write_text(s)
           PY
 
@@ -54,15 +57,15 @@ jobs:
       - name: Build debug APK
         run: flutter build apk --debug
 
-      - name: Build release AAB
-        run: flutter build appbundle --release
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: trustcheck-ai-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 14
+
+      - name: Build release AAB
+        run: flutter build appbundle --release
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
