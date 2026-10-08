@@ -1,0 +1,107 @@
+name: Samjhao AI Android Build
+
+on:
+  push:
+    branches: [ samjhao-ai-release ]
+    paths:
+      - 'samjhao_source.zip.b64'
+      - '.github/workflows/samjhao-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Unpack Samjhao source
+        run: |
+          rm -rf /tmp/samjhao
+          mkdir -p /tmp/samjhao
+          base64 -d samjhao_source.zip.b64 > /tmp/samjhao.zip
+          unzip -q /tmp/samjhao.zip -d /tmp/samjhao
+
+      - name: Generate Android project
+        working-directory: /tmp/samjhao
+        run: |
+          cp pubspec.yaml /tmp/samjhao_pubspec.yaml
+          cp lib/main.dart /tmp/samjhao_main.dart
+          cp -r assets /tmp/samjhao_assets
+          flutter create --platforms=android --org ai.samjhao --project-name samjhao_ai .
+          cp /tmp/samjhao_pubspec.yaml pubspec.yaml
+          cp /tmp/samjhao_main.dart lib/main.dart
+          rm -rf assets
+          cp -r /tmp/samjhao_assets assets
+          rm -f test/widget_test.dart
+
+      - name: Configure package and Android 16 target
+        working-directory: /tmp/samjhao
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle.kts')
+          s = p.read_text()
+          s = s.replace('namespace = "ai.samjhao.samjhao_ai"', 'namespace = "ai.samjhao.app"')
+          s = s.replace('applicationId = "ai.samjhao.samjhao_ai"', 'applicationId = "ai.samjhao.app"')
+          s = s.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
+          s = s.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
+          s = s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          marker = 'signingConfig = signingConfigs.getByName("debug")'
+          if marker in s and 'isMinifyEnabled = false' not in s:
+              s = s.replace(marker, marker + '\n            isMinifyEnabled = false\n            isShrinkResources = false')
+          p.write_text(s)
+
+          m = Path('android/app/src/main/AndroidManifest.xml')
+          t = m.read_text()
+          t = t.replace('android:label="samjhao_ai"', 'android:label="Samjhao AI"')
+          if 'android.permission.INTERNET' not in t:
+              t = t.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>')
+          m.write_text(t)
+          PY
+
+      - name: Resolve packages and generate icon
+        working-directory: /tmp/samjhao
+        run: |
+          flutter pub get
+          dart run flutter_launcher_icons
+
+      - name: Static analysis
+        working-directory: /tmp/samjhao
+        run: flutter analyze --no-fatal-infos
+
+      - name: Build installable APK
+        working-directory: /tmp/samjhao
+        run: flutter build apk --release
+
+      - name: Build Play bundle
+        working-directory: /tmp/samjhao
+        run: flutter build appbundle --release
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          cp /tmp/samjhao/build/app/outputs/flutter-apk/app-release.apk dist/Samjhao_AI_v1.0.0.apk
+          cp /tmp/samjhao/build/app/outputs/bundle/release/app-release.aab dist/Samjhao_AI_v1.0.0-debugsigned.aab
+          cp /tmp/samjhao/README.md dist/README.txt
+          sha256sum dist/* > dist/SHA256SUMS.txt
+
+      - name: Upload final build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Samjhao-AI-v1.0.0-Android
+          path: dist/
+          retention-days: 14
