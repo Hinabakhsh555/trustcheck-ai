@@ -4,7 +4,7 @@ on:
   push:
     branches: [ samjhao-ai-release ]
     paths:
-      - 'samjhao_source.zip.b64'
+      - 'samjhao_chunks/**'
       - '.github/workflows/samjhao-build.yml'
   workflow_dispatch:
 
@@ -28,11 +28,13 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Unpack Samjhao source
+      - name: Reassemble and unpack Samjhao source
         run: |
-          rm -rf /tmp/samjhao
+          rm -rf /tmp/samjhao /tmp/samjhao.zip /tmp/samjhao_source.b64
           mkdir -p /tmp/samjhao
-          base64 -d samjhao_source.zip.b64 > /tmp/samjhao.zip
+          cat samjhao_chunks/chunk_* > /tmp/samjhao_source.b64
+          base64 -d /tmp/samjhao_source.b64 > /tmp/samjhao.zip
+          unzip -t /tmp/samjhao.zip
           unzip -q /tmp/samjhao.zip -d /tmp/samjhao
 
       - name: Generate Android project
