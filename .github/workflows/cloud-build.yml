@@ -14,8 +14,10 @@ jobs:
 
       - name: Reconstruct source bundle
         run: |
+          cat archive/chunk00 archive/chunk01 archive/chunk02 archive/chunk03 archive/chunk04 archive/chunk05 archive/chunk06 archive/chunk07 > trustcheck_ai_complete_v1.zip.b64
           base64 -d trustcheck_ai_complete_v1.zip.b64 > trustcheck_ai_complete_v1.zip
           unzip -q trustcheck_ai_complete_v1.zip
+          test -f trustcheck_ai_v1/pubspec.yaml
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
