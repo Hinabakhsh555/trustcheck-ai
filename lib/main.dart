@@ -37,6 +37,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _controller = TextEditingController();
+  final TextEditingController _senderController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   final List<RiskResult> _history = [];
   bool _busy = false;
@@ -78,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _senderController.dispose();
     super.dispose();
   }
 
@@ -118,7 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _snack('Paste a message or choose a screenshot first.');
       return;
     }
-    final result = RiskEngine().analyze(text);
+    final result = RiskEngine().analyze(text, sender: _senderController.text.trim());
     setState(() => _history.insert(0, result));
     _saveHistory();
     Navigator.of(context).push(
@@ -152,6 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _CheckView(
             controller: _controller,
+            senderController: _senderController,
             busy: _busy,
             onPickScreenshot: _pickScreenshot,
             onCheck: _check,
@@ -177,12 +180,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _CheckView extends StatelessWidget {
   final TextEditingController controller;
+  final TextEditingController senderController;
   final bool busy;
   final VoidCallback onPickScreenshot;
   final VoidCallback onCheck;
 
   const _CheckView({
     required this.controller,
+    required this.senderController,
     required this.busy,
     required this.onPickScreenshot,
     required this.onCheck,
@@ -223,6 +228,17 @@ class _CheckView extends StatelessWidget {
                 onPressed: controller.clear,
                 icon: const Icon(Icons.close),
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: senderController,
+            keyboardType: TextInputType.text,
+            decoration: const InputDecoration(
+              labelText: 'Sender number or ID (optional)',
+              hintText: '+44..., 3737, or a sender name',
+              border: OutlineInputBorder(),
+              helperText: 'Unknown sender does not mean scam. No automatic verification.',
             ),
           ),
           const SizedBox(height: 14),
@@ -586,7 +602,7 @@ class AboutView extends StatelessWidget {
               ),
         ),
         const SizedBox(height: 6),
-        const Text('Version 1.1.0 · Polished V1'),
+        const Text('Version 1.2.0 · Global sender-aware preview'),
         const SizedBox(height: 20),
         const Card(
           child: Padding(
@@ -837,7 +853,7 @@ class RiskEngine {
     ),
   ];
 
-  RiskResult analyze(String input) {
+  RiskResult analyze(String input, {String sender = ''}) {
     final text = input.trim();
     final lower = text.toLowerCase();
     var score = 0;
@@ -852,6 +868,20 @@ class RiskEngine {
     for (final rule in [...hardRules, ...contextRules]) {
       if (rule.regex.hasMatch(text)) {
         addSignal(RiskSignal(rule.title, rule.detail, rule.points));
+      }
+    }
+
+    // Sender checks are deliberately evidence-based: an unknown or
+    // international number alone must never increase risk.
+    final senderId = sender.trim().toLowerCase().replaceAll(RegExp(r'[\\s()\\-]'), '');
+    final brandClaim = RegExp(r'\\b(paypal|amazon|apple|google|microsoft|dhl|fedex|ups|easypaisa|jazzcash|revolut|wise)\\b', caseSensitive: false).firstMatch(text);
+    if (senderId.isNotEmpty && brandClaim != null) {
+      final brand = brandClaim.group(0)!.toLowerCase();
+      final senderLetters = senderId.replaceAll(RegExp(r'[^a-z]'), '');
+      if (senderLetters.isNotEmpty && senderLetters != brand &&
+          (senderLetters.contains(brand) || brand.contains(senderLetters) && senderLetters.length >= 4)) {
+        addSignal(RiskSignal('Possible brand sender mismatch',
+          'Sender ID resembles $brand but does not match its name. This is not proof of spoofing; verify through an official channel.', 18));
       }
     }
 
@@ -1002,13 +1032,13 @@ class RiskEngine {
 
     final summary = switch (level) {
       RiskLevel.high =>
-        'Strong or multiple scam indicators are present. Avoid engaging or acting on the message until it has been independently verified.',
+        'Strong scam indicators detected. Do not act until independently verified.',
       RiskLevel.suspicious =>
-        'Several suspicious behavioral or content signals are present. Avoid replying, clicking or paying until the sender and request are independently verified.',
+        'Multiple warning signs detected. Verify the sender before clicking, replying or paying.',
       RiskLevel.caution =>
-        'The message is not clearly fraudulent, but it contains patterns that justify caution. Verify the sender before replying or continuing the conversation.',
+        'Some warning signs need verification. This does not confirm a scam.',
       RiskLevel.low =>
-        'No meaningful scam pattern was detected in the supplied text. Stay alert because new scams can begin with harmless-looking contact.',
+        'No clear scam indicators detected. This does not guarantee safety.',
     };
 
     final actions = _actionsFor(
@@ -1080,12 +1110,12 @@ class RiskEngine {
 
     if (level != RiskLevel.low || hasEngagementSignal) {
       actions.add(
-        'Avoid replying until you independently verify who the sender is and why they contacted you.',
+        'Verify unexpected requests through a trusted contact method.',
       );
     }
     if (bankAlert) {
       actions.add(
-        'For bank or transaction alerts, open the official banking app or call a verified number yourself. Do not use contact details supplied by the message.',
+        'For financial alerts, check your official account app directly.',
       );
     }
     if (hasLink) {
@@ -1109,7 +1139,7 @@ class RiskEngine {
       );
     }
     actions.add(
-      'If the claim involves a person you know, contact them through a previously saved number or another trusted channel.',
+      'If someone claims to know you, confirm using a saved contact.',
     );
 
     return actions.toSet().toList();
