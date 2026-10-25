@@ -821,6 +821,15 @@ class RiskEngine {
       20,
     ),
     _Rule(
+      RegExp(
+        r'\b(account|bank|wallet)\b.{0,35}\b(balance|balans|paisa|paise|amount|rakham|raqam)\b|\b(balance|balans)\b.{0,35}\b(account|bank|wallet)\b|\b(account\s+main\s+balance|account\s+mein\s+balance|balance\s+parha|balance\s+para|balance\s+pada|balance\s+kitna|kitna\s+balance)\b',
+        caseSensitive: false,
+      ),
+      'Probes account balance or financial status',
+      'Questions about your account balance or available money from an unknown sender can be an early social-engineering probe.',
+      18,
+    ),
+    _Rule(
       RegExp(r'\b(profit screenshot|proof of profit|members earning|successful withdrawal|withdrawal proof|testimonial)\b', caseSensitive: false),
       'Social-proof / profit grooming',
       'Fake testimonials and profit screenshots are commonly used to create false legitimacy.',
@@ -906,6 +915,25 @@ class RiskEngine {
       r'\b(bank|account|card|transaction|debited|withdrawal|payment)\b',
       caseSensitive: false,
     ).hasMatch(text);
+
+    final balanceProbe = RegExp(
+      r'\b(account|bank|wallet)\b.{0,35}\b(balance|balans|paisa|paise|amount|rakham|raqam)\b|\b(balance|balans)\b.{0,35}\b(account|bank|wallet)\b|\b(account\s+main\s+balance|account\s+mein\s+balance|balance\s+parha|balance\s+para|balance\s+pada|balance\s+kitna|kitna\s+balance)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+
+    if (balanceProbe &&
+        RegExp(
+          r'\b(hi|hello|salam|aslam|assalam|kese|kesy|kaise|how are you|kia haal|kya haal|khairiyat)\b',
+          caseSensitive: false,
+        ).hasMatch(text)) {
+      addSignal(
+        const RiskSignal(
+          'Friendly opener followed by financial probing',
+          'Building casual familiarity before asking about money or account status is a common social-engineering pattern.',
+          12,
+        ),
+      );
+    }
 
     final replyHook = RegExp(
       r'\b(reply|respond|type|send)\s+(yes|no|y|n|stop|1|2)\b',
@@ -1016,6 +1044,9 @@ class RiskEngine {
     }
     if (RegExp(r'\b(stock|trading|investment|forex|guaranteed return)\b', caseSensitive: false).hasMatch(text)) {
       return 'Investment / trading solicitation';
+    }
+    if (RegExp(r'\b(account|bank|wallet)\b.{0,35}\b(balance|balans|paisa|paise|amount|rakham|raqam)\b|\b(balance|balans)\b.{0,35}\b(account|bank|wallet)\b', caseSensitive: false).hasMatch(text)) {
+      return 'Financial probing / social-engineering risk';
     }
     if (RegExp(r'\b(bank|easypaisa|jazzcash|paypal|account|debited|transaction|otp)\b', caseSensitive: false).hasMatch(text)) {
       return 'Financial impersonation / phishing risk';
