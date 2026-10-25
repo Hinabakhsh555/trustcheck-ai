@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +41,39 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<RiskResult> _history = [];
   bool _busy = false;
   int _tab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList('risk_history') ?? const [];
+    final loaded = <RiskResult>[];
+    for (final item in raw) {
+      try {
+        loaded.add(RiskResult.fromJson(jsonDecode(item) as Map<String, dynamic>));
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _history.addAll(loaded));
+  }
+
+  Future<void> _saveHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final items = _history
+        .take(20)
+        .map((r) => jsonEncode(r.toJson()))
+        .toList();
+    await prefs.setStringList('risk_history', items);
+  }
+
+  Future<void> _clearHistory() async {
+    setState(() => _history.clear());
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('risk_history');
+  }
 
   @override
   void dispose() {
@@ -84,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final result = RiskEngine().analyze(text);
     setState(() => _history.insert(0, result));
+    _saveHistory();
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => ResultScreen(result: result)),
     );
@@ -119,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPickScreenshot: _pickScreenshot,
             onCheck: _check,
           ),
-          HistoryView(history: _history),
+          HistoryView(history: _history, onClear: _clearHistory),
           const LearnView(),
           const AboutView(),
         ],
@@ -167,7 +204,7 @@ class _CheckView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'TrustCheck looks for obvious fraud signals and softer social-engineering patterns such as unsolicited contact, engagement hooks, vague recruitment, impersonation, pressure and investment grooming.',
+            'Paste a message or scan a screenshot. Get a simple risk result and the safest next step.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 20),
@@ -189,7 +226,7 @@ class _CheckView extends StatelessWidget {
             icon: const Icon(Icons.search),
             label: const Padding(
               padding: EdgeInsets.symmetric(vertical: 14),
-              child: Text('Analyze message'),
+              child: Text('Check message'),
             ),
           ),
           const SizedBox(height: 10),
@@ -204,49 +241,21 @@ class _CheckView extends StatelessWidget {
                 : const Icon(Icons.image_outlined),
             label: const Padding(
               padding: EdgeInsets.symmetric(vertical: 14),
-              child: Text('Choose screenshot'),
+              child: Text('Scan screenshot'),
             ),
           ),
-          const SizedBox(height: 20),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.psychology_alt_outlined),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'A low score does not mean “safe.” TrustCheck uses Low, Caution, Suspicious and High Risk so uncertain messages can be flagged without falsely declaring them scams.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-                ],
+          const SizedBox(height: 16),
+          const Row(
+            children: [
+              Icon(Icons.lock_outline, size: 18),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Private by default: V1 checks only what you paste or select.',
+                  style: TextStyle(fontSize: 13),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.lock_outline),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Privacy-first V1: screenshot recognition runs on-device. TrustCheck does not automatically read SMS, WhatsApp, contacts, calls or notifications.',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Message analysis supports English, Roman Urdu and selected Urdu scam phrases. Urdu-script screenshot OCR is limited in V1.',
+            ],
           ),
         ],
       ),
@@ -323,49 +332,76 @@ class ResultScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
-            'Why it was flagged',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          if (result.signals.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'No meaningful scam pattern was detected in the supplied text. This is not proof that the sender or message is legitimate.',
+            'What to do now',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
-              ),
-            )
-          else
-            ...result.signals.map(
-              (s) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Card(
-                  child: ListTile(
-                    leading: CircleAvatar(child: Text('+${s.points}')),
-                    title: Text(
-                      s.title,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(s.detail),
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(height: 18),
-          Text(
-            'Recommended action',
-            style: Theme.of(context).textTheme.titleLarge,
           ),
-          ...result.actions.map(
+          const SizedBox(height: 6),
+          ...result.actions.take(2).map(
             (a) => ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.check_circle_outline, color: color),
               title: Text(a),
             ),
           ),
+          const SizedBox(height: 8),
+          Card(
+            child: ExpansionTile(
+              leading: const Icon(Icons.search),
+              title: const Text(
+                'Why TrustCheck flagged this',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              children: [
+                if (result.signals.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Text(
+                      'No meaningful scam pattern was detected. This is not proof that the sender is legitimate.',
+                    ),
+                  )
+                else
+                  ...result.signals.map(
+                    (s) => ListTile(
+                      leading: CircleAvatar(
+                        radius: 18,
+                        child: Text(
+                          '+${s.points}',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                      title: Text(
+                        s.title,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(s.detail),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (result.actions.length > 2)
+            Card(
+              child: ExpansionTile(
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text(
+                  'More safety steps',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                children: result.actions
+                    .skip(2)
+                    .map(
+                      (a) => ListTile(
+                        leading: Icon(Icons.check_circle_outline, color: color),
+                        title: Text(a),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
           const Divider(),
           const SizedBox(height: 10),
           const Text(
@@ -380,7 +416,8 @@ class ResultScreen extends StatelessWidget {
 
 class HistoryView extends StatelessWidget {
   final List<RiskResult> history;
-  const HistoryView({super.key, required this.history});
+  final VoidCallback onClear;
+  const HistoryView({super.key, required this.history, required this.onClear});
 
   @override
   Widget build(BuildContext context) {
@@ -393,7 +430,27 @@ class HistoryView extends StatelessWidget {
       );
     }
 
-    return ListView.builder(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Recent checks',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+              ),
+              TextButton(
+                onPressed: onClear,
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: history.length,
       itemBuilder: (context, i) {
@@ -425,6 +482,9 @@ class HistoryView extends StatelessWidget {
           ),
         );
       },
+    ),
+        ),
+      ],
     );
   }
 }
@@ -581,6 +641,48 @@ class RiskResult {
     required this.signals,
     required this.actions,
   });
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'score': score,
+        'level': level.name,
+        'category': category,
+        'summary': summary,
+        'signals': signals
+            .map((s) => {
+                  'title': s.title,
+                  'detail': s.detail,
+                  'points': s.points,
+                })
+            .toList(),
+        'actions': actions,
+      };
+
+  factory RiskResult.fromJson(Map<String, dynamic> json) {
+    return RiskResult(
+      text: json['text'] as String? ?? '',
+      score: json['score'] as int? ?? 0,
+      level: RiskLevel.values.firstWhere(
+        (e) => e.name == json['level'],
+        orElse: () => RiskLevel.low,
+      ),
+      category: json['category'] as String? ?? 'No specific scam pattern identified',
+      summary: json['summary'] as String? ?? '',
+      signals: ((json['signals'] as List?) ?? const [])
+          .map((e) => e as Map<String, dynamic>)
+          .map(
+            (e) => RiskSignal(
+              e['title'] as String? ?? '',
+              e['detail'] as String? ?? '',
+              e['points'] as int? ?? 0,
+            ),
+          )
+          .toList(),
+      actions: ((json['actions'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+    );
+  }
 }
 
 class _Rule {
