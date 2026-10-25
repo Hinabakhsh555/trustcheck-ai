@@ -873,8 +873,8 @@ class RiskEngine {
 
     // Sender checks are deliberately evidence-based: an unknown or
     // international number alone must never increase risk.
-    final senderId = sender.trim().toLowerCase().replaceAll(RegExp(r'[\\s()\\-]'), '');
-    final brandClaim = RegExp(r'\\b(paypal|amazon|apple|google|microsoft|dhl|fedex|ups|easypaisa|jazzcash|revolut|wise)\\b', caseSensitive: false).firstMatch(text);
+    final senderId = sender.trim().toLowerCase().replaceAll(RegExp(r'[\s()-]'), '');
+    final brandClaim = RegExp(r'\b(paypal|amazon|apple|google|microsoft|dhl|fedex|ups|easypaisa|jazzcash|revolut|wise)\b', caseSensitive: false).firstMatch(text);
     if (senderId.isNotEmpty && brandClaim != null) {
       final brand = brandClaim.group(0)!.toLowerCase();
       final senderLetters = senderId.replaceAll(RegExp(r'[^a-z]'), '');
