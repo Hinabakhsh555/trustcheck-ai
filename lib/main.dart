@@ -212,12 +212,17 @@ class _CheckView extends StatelessWidget {
             controller: controller,
             minLines: 8,
             maxLines: 14,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Message to check',
               hintText:
                   'Paste an SMS, WhatsApp, job, bank, marketplace or investment message...',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
               alignLabelWithHint: true,
+              suffixIcon: IconButton(
+                tooltip: 'Clear',
+                onPressed: controller.clear,
+                icon: const Icon(Icons.close),
+              ),
             ),
           ),
           const SizedBox(height: 14),
