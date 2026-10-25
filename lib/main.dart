@@ -35,9 +35,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _controller = TextEditingController();
   final ImagePicker _picker = ImagePicker();
+  final List<RiskResult> _history = [];
   bool _busy = false;
   int _tab = 0;
-  final List<RiskResult> _history = [];
 
   @override
   void dispose() {
@@ -48,16 +48,23 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _pickScreenshot() async {
     setState(() => _busy = true);
     try {
-      final image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 95);
+      final image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 95,
+      );
       if (image == null) return;
+
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       try {
-        final input = InputImage.fromFilePath(image.path);
-        final result = await recognizer.processImage(input);
+        final result = await recognizer.processImage(
+          InputImage.fromFilePath(image.path),
+        );
         if (!mounted) return;
         _controller.text = result.text;
         if (result.text.trim().isEmpty) {
-          _snack('No readable Latin/Roman-Urdu text was found. You can paste the text manually.');
+          _snack(
+            'No readable Latin/Roman-Urdu text was found. Urdu-script screenshots may need manual paste in V1.',
+          );
         }
       } finally {
         await recognizer.close();
@@ -72,27 +79,36 @@ class _HomeScreenState extends State<HomeScreen> {
   void _check() {
     final text = _controller.text.trim();
     if (text.isEmpty) {
-      _snack('Paste a suspicious message or choose a screenshot first.');
+      _snack('Paste a message or choose a screenshot first.');
       return;
     }
     final result = RiskEngine().analyze(text);
     setState(() => _history.insert(0, result));
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ResultScreen(result: result)));
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ResultScreen(result: result)),
+    );
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(children: [
-          Icon(Icons.shield_outlined),
-          SizedBox(width: 8),
-          Text('TrustCheck AI', style: TextStyle(fontWeight: FontWeight.w700)),
-        ]),
+        title: const Row(
+          children: [
+            Icon(Icons.shield_outlined),
+            SizedBox(width: 8),
+            Text(
+              'TrustCheck AI',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
       ),
       body: IndexedStack(
         index: _tab,
@@ -139,22 +155,30 @@ class _CheckView extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
         children: [
-          const Text('Check before you trust.', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.7)),
+          const Text(
+            'Check before you trust.',
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.7,
+            ),
+          ),
           const SizedBox(height: 8),
           Text(
-            'Paste a suspicious SMS, WhatsApp, marketplace, banking, job or investment message. TrustCheck explains the warning signs instead of giving a black-box verdict.',
+            'TrustCheck looks for obvious fraud signals and softer social-engineering patterns such as unsolicited contact, engagement hooks, vague recruitment, impersonation, pressure and investment grooming.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 20),
           TextField(
             controller: controller,
             minLines: 8,
             maxLines: 14,
             decoration: const InputDecoration(
-              labelText: 'Suspicious message',
-              hintText: 'Example: Your account will be blocked. Send your OTP immediately...',
+              labelText: 'Message to check',
+              hintText:
+                  'Paste an SMS, WhatsApp, job, bank, marketplace or investment message...',
               border: OutlineInputBorder(),
               alignLabelWithHint: true,
             ),
@@ -163,32 +187,67 @@ class _CheckView extends StatelessWidget {
           FilledButton.icon(
             onPressed: busy ? null : onCheck,
             icon: const Icon(Icons.search),
-            label: const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Text('Check message')),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text('Analyze message'),
+            ),
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
             onPressed: busy ? null : onPickScreenshot,
             icon: busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.image_outlined),
-            label: const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Text('Choose screenshot')),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text('Choose screenshot'),
+            ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 20),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.lock_outline),
-                const SizedBox(width: 12),
-                Expanded(child: Text(
-                  'Privacy-first V1: screenshot text recognition runs on the device. The app does not automatically read SMS, WhatsApp, contacts, calls or notifications.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                )),
-              ]),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.psychology_alt_outlined),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'A low score does not mean “safe.” TrustCheck uses Low, Caution, Suspicious and High Risk so uncertain messages can be flagged without falsely declaring them scams.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lock_outline),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Privacy-first V1: screenshot recognition runs on-device. TrustCheck does not automatically read SMS, WhatsApp, contacts, calls or notifications.',
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          const Text('Supports English, Roman Urdu and common Urdu scam phrases for message analysis.'),
+          const Text(
+            'Message analysis supports English, Roman Urdu and selected Urdu scam phrases. Urdu-script screenshot OCR is limited in V1.',
+          ),
         ],
       ),
     );
@@ -199,63 +258,120 @@ class ResultScreen extends StatelessWidget {
   final RiskResult result;
   const ResultScreen({super.key, required this.result});
 
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (result.level) {
+  Color _riskColor(BuildContext context) {
+    return switch (result.level) {
       RiskLevel.low => Colors.green.shade700,
-      RiskLevel.medium => Colors.orange.shade800,
+      RiskLevel.caution => Colors.amber.shade900,
+      RiskLevel.suspicious => Colors.deepOrange.shade700,
       RiskLevel.high => Theme.of(context).colorScheme.error,
     };
-    final label = switch (result.level) {
-      RiskLevel.low => 'LOW RISK',
-      RiskLevel.medium => 'MEDIUM RISK',
-      RiskLevel.high => 'HIGH RISK',
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _riskColor(context);
+    final icon = switch (result.level) {
+      RiskLevel.low => Icons.shield_outlined,
+      RiskLevel.caution => Icons.info_outline,
+      RiskLevel.suspicious => Icons.warning_amber_rounded,
+      RiskLevel.high => Icons.gpp_bad_outlined,
     };
 
     return Scaffold(
       appBar: AppBar(title: const Text('Risk analysis')),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
         children: [
           Card(
             child: Padding(
               padding: const EdgeInsets.all(22),
-              child: Column(children: [
-                Icon(result.level == RiskLevel.high ? Icons.gpp_bad_outlined : Icons.shield_outlined, size: 54, color: color),
-                const SizedBox(height: 10),
-                Text(label, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color)),
-                const SizedBox(height: 6),
-                Text('${result.score}/100', style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 8),
-                Text(result.category, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
-              ]),
+              child: Column(
+                children: [
+                  Icon(icon, size: 58, color: color),
+                  const SizedBox(height: 10),
+                  Text(
+                    result.level.label,
+                    style: TextStyle(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w900,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${result.score}/100',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    result.category,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 14),
-          Text(result.summary, style: Theme.of(context).textTheme.bodyLarge),
+          Card(
+            color: color.withValues(alpha: 0.08),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                result.summary,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
-          Text('Why it was flagged', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Why it was flagged',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 8),
           if (result.signals.isEmpty)
-            const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('No strong common scam indicator was detected. This does not prove the message is legitimate.')))
-          else
-            ...result.signals.map((s) => Card(
-              child: ListTile(
-                leading: CircleAvatar(child: Text('+${s.points}')),
-                title: Text(s.title),
-                subtitle: Text(s.detail),
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'No meaningful scam pattern was detected in the supplied text. This is not proof that the sender or message is legitimate.',
+                ),
               ),
-            )),
-          const SizedBox(height: 20),
-          Text('Recommended action', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 6),
-          ...result.actions.map((a) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.check_circle_outline),
-            title: Text(a),
-          )),
-          const SizedBox(height: 16),
-          const Text('TrustCheck provides a risk assessment, not a guarantee that a message is fraudulent or legitimate.', style: TextStyle(fontSize: 12)),
+            )
+          else
+            ...result.signals.map(
+              (s) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Card(
+                  child: ListTile(
+                    leading: CircleAvatar(child: Text('+${s.points}')),
+                    title: Text(
+                      s.title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(s.detail),
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 18),
+          Text(
+            'Recommended action',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          ...result.actions.map(
+            (a) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.check_circle_outline, color: color),
+              title: Text(a),
+            ),
+          ),
+          const Divider(),
+          const SizedBox(height: 10),
+          const Text(
+            'TrustCheck provides a risk assessment, not a guarantee that a message is fraudulent or legitimate. New scam methods evolve continuously, so independent verification remains important.',
+            style: TextStyle(fontSize: 12),
+          ),
         ],
       ),
     );
@@ -269,19 +385,45 @@ class HistoryView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (history.isEmpty) {
-      return const Center(child: Padding(padding: EdgeInsets.all(28), child: Text('No checks yet. Your checks from this session will appear here.')));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(28),
+          child: Text('No checks yet. Results from this app session will appear here.'),
+        ),
+      );
     }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: history.length,
       itemBuilder: (context, i) {
         final r = history[i];
-        return Card(child: ListTile(
-          leading: Icon(r.level == RiskLevel.high ? Icons.warning_amber_rounded : Icons.shield_outlined),
-          title: Text('${r.score}/100 · ${r.category}'),
-          subtitle: Text(r.text, maxLines: 2, overflow: TextOverflow.ellipsis),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ResultScreen(result: r))),
-        ));
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Card(
+            child: ListTile(
+              leading: Icon(
+                r.level == RiskLevel.high
+                    ? Icons.gpp_bad_outlined
+                    : r.level == RiskLevel.suspicious
+                        ? Icons.warning_amber_rounded
+                        : Icons.shield_outlined,
+              ),
+              title: Text(
+                '${r.score}/100 · ${r.level.label}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                '${r.category}\n${r.text}',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => ResultScreen(result: r)),
+              ),
+            ),
+          ),
+        );
       },
     );
   }
@@ -293,19 +435,72 @@ class LearnView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      ('OTP & PIN requests', 'Never share an OTP, PIN, password, recovery phrase or private key with another person.'),
-      ('Urgency and threats', 'Scammers create pressure: “act now”, “account blocked”, “police case”, or artificial deadlines.'),
-      ('Unexpected payments', 'Verify the recipient independently before paying a fee, deposit, courier charge or investment.'),
-      ('Job/task scams', 'Be cautious when a job promises unusually easy earnings or asks you to deposit money first.'),
-      ('Investment scams', 'Guaranteed or fixed high returns and “double your money” claims are major warning signs.'),
-      ('Suspicious links', 'Open the organization’s official app/site yourself rather than trusting a link inside a message.'),
+      (
+        'Harmless-looking first contact',
+        'A scam may begin with a simple reply request, vague question or friendly introduction. Verify unknown senders before engaging.'
+      ),
+      (
+        'Unexpected bank alerts',
+        'Do not reply to unexpected debit or account alerts. Open the bank’s official app or call a verified number independently.'
+      ),
+      (
+        'OTP, PIN & credential requests',
+        'Never send OTPs, PINs, passwords, recovery phrases or private keys to another person.'
+      ),
+      (
+        'Urgency and pressure',
+        '“Act now”, “10 minutes left”, “account blocked”, emergency claims and artificial deadlines are common social-engineering tactics.'
+      ),
+      (
+        'Job & task scams',
+        'Be cautious with unsolicited recruiters, vague flexible roles, easy daily earnings, prepaid tasks or requests to move to Telegram/WhatsApp groups.'
+      ),
+      (
+        'Investment-group grooming',
+        'Fake experts and fake group members may post fabricated profit screenshots to create social proof before asking you to invest.'
+      ),
+      (
+        'Family / colleague impersonation',
+        'Unknown numbers claiming to be a relative, boss or friend in an emergency should be verified using a known number.'
+      ),
+      (
+        'Suspicious links & files',
+        'Do not open unexpected links, APKs, documents or remote-access tools. Find the official app or site yourself.'
+      ),
+      (
+        'Guaranteed returns',
+        'Guaranteed, risk-free or unusually high returns are major investment-fraud indicators.'
+      ),
     ];
+
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
-        Text('Scam warning signs', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-        const SizedBox(height: 10),
-        ...items.map((x) => Card(child: ListTile(title: Text(x.$1, style: const TextStyle(fontWeight: FontWeight.w700)), subtitle: Text(x.$2)))),
+        Text(
+          'Modern scam warning signs',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Scams evolve. TrustCheck looks beyond obvious OTP and payment requests and also considers how a conversation is being initiated.',
+        ),
+        const SizedBox(height: 12),
+        ...items.map(
+          (x) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Card(
+              child: ListTile(
+                title: Text(
+                  x.$1,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(x.$2),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -319,25 +514,47 @@ class AboutView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('TrustCheck AI', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        const Text('Version 1.0.0'),
-        const SizedBox(height: 22),
-        const Card(child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('TrustCheck is designed to help users identify common fraud, phishing, impersonation and social-engineering indicators. It does not accuse a sender of a crime and should be combined with independent verification.'),
-        )),
+        Text(
+          'TrustCheck AI',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: 6),
+        const Text('Version 1.1.0 · Polished V1'),
+        const SizedBox(height: 20),
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'TrustCheck identifies common fraud, phishing, impersonation and social-engineering indicators. It also flags uncertain behavioral patterns as Caution or Suspicious instead of treating every unproven message as safe or fraudulent.',
+            ),
+          ),
+        ),
         const SizedBox(height: 10),
-        const Card(child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('For urgent financial concerns, contact the bank/payment provider through a trusted official channel. Do not use phone numbers or links supplied by a suspicious message.'),
-        )),
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Automatic background monitoring is not enabled in V1. Real-time notification protection is planned as a separate permission-aware protection mode.',
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-enum RiskLevel { low, medium, high }
+enum RiskLevel { low, caution, suspicious, high }
+
+extension RiskLevelLabel on RiskLevel {
+  String get label => switch (this) {
+        RiskLevel.low => 'LOW RISK',
+        RiskLevel.caution => 'CAUTION',
+        RiskLevel.suspicious => 'SUSPICIOUS',
+        RiskLevel.high => 'HIGH RISK',
+      };
+}
 
 class RiskSignal {
   final String title;
@@ -354,7 +571,16 @@ class RiskResult {
   final String summary;
   final List<RiskSignal> signals;
   final List<String> actions;
-  const RiskResult({required this.text, required this.score, required this.level, required this.category, required this.summary, required this.signals, required this.actions});
+
+  const RiskResult({
+    required this.text,
+    required this.score,
+    required this.level,
+    required this.category,
+    required this.summary,
+    required this.signals,
+    required this.actions,
+  });
 }
 
 class _Rule {
@@ -366,74 +592,388 @@ class _Rule {
 }
 
 class RiskEngine {
-  static final RegExp _url = RegExp(r'((https?:\/\/|www\.)[^\s]+|(?:[a-z0-9-]+\.)+(?:com|net|org|pk|xyz|top|click|info|live|site)\b[^\s]*)', caseSensitive: false);
+  static final RegExp _url = RegExp(
+    r'((https?:\/\/|www\.)[^\s]+|(?:[a-z0-9-]+\.)+(?:com|net|org|pk|in|xyz|top|click|info|live|site|app)\b[^\s]*)',
+    caseSensitive: false,
+  );
 
-  final List<_Rule> rules = [
-    _Rule(RegExp(r'\b(otp|one[ -]?time password|verification code|pin|password)\b', caseSensitive: false), 'Requests a security credential', 'Legitimate services should not ask you to send an OTP, PIN or password to another person.', 30),
-    _Rule(RegExp(r'\b(urgent|immediately|act now|foran|forun|jaldi|abhi|فوری|فوراً|جلدی)\b', caseSensitive: false), 'Creates urgency', 'Pressure and artificial deadlines are common social-engineering techniques.', 12),
-    _Rule(RegExp(r'(account.{0,20}(blocked|suspended|closed)|verify.{0,15}account|اکاؤنٹ.{0,20}(بند|بلاک))', caseSensitive: false), 'Threatens account restriction', 'The message may be using fear of account loss to force quick action.', 18),
-    _Rule(RegExp(r'\b(send|transfer|pay|deposit|bhejo|bhejein|jama)\b.{0,45}\b(money|cash|fee|payment|rs|pkr|usd|usdt|paisa|rupees)\b', caseSensitive: false), 'Requests money', 'Unexpected payment or transfer requests materially increase fraud risk.', 20),
-    _Rule(RegExp(r'\b(guaranteed|double|2x|100% profit|risk[ -]?free|fixed profit|double paisa|paisa double)\b', caseSensitive: false), 'Unrealistic return claim', 'Guaranteed or unusually high financial returns are a common investment-scam indicator.', 27),
-    _Rule(RegExp(r'\b(bank|easypaisa|jazzcash|paypal|daraz|courier|police|government|nadra|fia|fbr)\b', caseSensitive: false), 'Possible organization impersonation', 'Verify the request through the organization’s official app, website or trusted phone number.', 8),
-    _Rule(RegExp(r'\b(prize|winner|lottery|gift|reward|congratulations|inaam|انعام|لاٹری)\b', caseSensitive: false), 'Unexpected reward', 'Unexpected prizes and rewards are frequently used as scam bait.', 18),
-    _Rule(RegExp(r'\b(job offer|work from home|easy income|daily earning|part[ -]?time job|online task|task job)\b', caseSensitive: false), 'Unsolicited earning opportunity', 'Unexpected jobs promising easy income should be independently verified.', 16),
-    _Rule(RegExp(r'\b(seed phrase|recovery phrase|private key|wallet key)\b', caseSensitive: false), 'Requests crypto credentials', 'A legitimate service should never ask for your wallet seed phrase or private key.', 38),
-    _Rule(RegExp(r'\b(anydesk|teamviewer|remote access|screen share|install this app)\b', caseSensitive: false), 'Requests remote device access', 'Remote-access tools can let a scammer control your phone or computer.', 28),
-    _Rule(RegExp(r'(او ٹی پی|پاس ورڈ|پن کوڈ|رقم بھیج|پیسے بھیج|اکاؤنٹ بند|اکاؤنٹ بلاک)'), 'Urdu high-risk phrase', 'The message contains a common Urdu-language scam indicator.', 24),
+  static final RegExp _phone = RegExp(
+    r'(?:\+\d{1,3}[\s-]?)?(?:\d[\s-]?){9,13}',
+  );
+
+  final List<_Rule> hardRules = [
+    _Rule(
+      RegExp(r'\b(otp|one[ -]?time password|verification code|pin|password)\b', caseSensitive: false),
+      'Requests a security credential',
+      'Legitimate services should not ask you to send an OTP, PIN or password to another person.',
+      30,
+    ),
+    _Rule(
+      RegExp(r'\b(seed phrase|recovery phrase|private key|wallet key)\b', caseSensitive: false),
+      'Requests crypto credentials',
+      'A legitimate service should never ask for your wallet seed phrase or private key.',
+      40,
+    ),
+    _Rule(
+      RegExp(r'\b(anydesk|teamviewer|remote access|screen share|install this app|install apk|apk file)\b', caseSensitive: false),
+      'Requests device access or installation',
+      'Remote-access tools and unexpected app files can give an attacker control of your device.',
+      30,
+    ),
+    _Rule(
+      RegExp(r'\b(send|transfer|pay|deposit|top[ -]?up|recharge|bhejo|bhejein|jama)\b.{0,50}\b(money|cash|fee|payment|rs\.?|pkr|usd|usdt|paisa|rupees|upi)\b', caseSensitive: false),
+      'Requests money or a deposit',
+      'Unexpected payment, deposit or transfer requests materially increase fraud risk.',
+      25,
+    ),
+    _Rule(
+      RegExp(r'\b(guaranteed|double|2x|100% profit|risk[ -]?free|fixed profit|double paisa|paisa double|guaranteed return)\b', caseSensitive: false),
+      'Unrealistic return claim',
+      'Guaranteed or unusually high financial returns are a major investment-scam indicator.',
+      28,
+    ),
+    _Rule(
+      RegExp(r'\b(prize|winner|lottery|gift|reward|congratulations|inaam|انعام|لاٹری)\b', caseSensitive: false),
+      'Unexpected reward',
+      'Unexpected prizes and rewards are frequently used as scam bait.',
+      18,
+    ),
+    _Rule(
+      RegExp(r'(او ٹی پی|پاس ورڈ|پن کوڈ|رقم بھیج|پیسے بھیج|اکاؤنٹ بند|اکاؤنٹ بلاک)'),
+      'Urdu high-risk phrase',
+      'The message contains a common Urdu-language scam indicator.',
+      24,
+    ),
+  ];
+
+  final List<_Rule> contextRules = [
+    _Rule(
+      RegExp(r'\b(urgent|immediately|act now|within \d+ minutes?|today only|last chance|foran|forun|jaldi|abhi|فوری|فوراً|جلدی)\b', caseSensitive: false),
+      'Creates urgency or pressure',
+      'Artificial urgency can push people to act before independently verifying the request.',
+      12,
+    ),
+    _Rule(
+      RegExp(r'(account.{0,24}(blocked|suspended|closed|frozen)|verify.{0,20}account|اکاؤنٹ.{0,24}(بند|بلاک))', caseSensitive: false),
+      'Threatens account restriction',
+      'Fear of account loss is a common social-engineering technique.',
+      18,
+    ),
+    _Rule(
+      RegExp(r'\b(bank|easypaisa|jazzcash|paypal|daraz|courier|police|government|nadra|fia|fbr|sebi|broker|exchange)\b', caseSensitive: false),
+      'Claims an institutional identity',
+      'Unexpected institutional messages should be verified through an independently found official channel.',
+      8,
+    ),
+    _Rule(
+      RegExp(r'\b(job|recruitment|recruiter|hiring|vacancy|work from home|flexible role|part[ -]?time|online task|task job|daily earning|easy income)\b', caseSensitive: false),
+      'Unsolicited recruitment / earning theme',
+      'Vague or unexpected job approaches are commonly used to start task and recruitment scams.',
+      14,
+    ),
+    _Rule(
+      RegExp(r'\b(stock tip|stock recommendation|trading group|investment group|vip group|whatsapp group|telegram group|crypto signal|forex signal)\b', caseSensitive: false),
+      'Investment-group solicitation',
+      'Fraudulent groups may use fake experts and fabricated profit claims to build trust.',
+      18,
+    ),
+    _Rule(
+      RegExp(r'\b(son|daughter|mother|father|brother|sister|friend|boss|colleague|relative)\b.{0,45}\b(emergency|urgent|lost my phone|new number|need money|send money|loan)\b', caseSensitive: false),
+      'Possible family or colleague impersonation',
+      'Emergency claims from a new or unknown number should be verified using a known contact method.',
+      24,
+    ),
+    _Rule(
+      RegExp(r'\b(debited|debit alert|transaction alert|transaction of|withdrawal|purchase of|charged|payment of)\b', caseSensitive: false),
+      'Unexpected financial alert',
+      'Unexpected transaction alerts can be used to trigger panic and steer users into a fraudulent interaction.',
+      16,
+    ),
+    _Rule(
+      RegExp(r'\b(reply|respond|type|send)\s+(yes|no|y|n|stop|1|2)\b|\breply\s+(yes|no)\b', caseSensitive: false),
+      'Engagement / reply request',
+      'A harmless-looking reply can be used to continue social engineering. Verify the sender before engaging.',
+      14,
+    ),
+    _Rule(
+      RegExp(r'\b(may i share|can i share|are you interested|would you be interested|kindly reply|reply back|message me back|contact me)\b', caseSensitive: false),
+      'Conversation hook from an unknown sender',
+      'Scams can begin with low-pressure engagement before any money, link or credential request appears.',
+      10,
+    ),
+    _Rule(
+      RegExp(r'\b(join|move to|contact on|message on)\b.{0,25}\b(whatsapp|telegram)\b', caseSensitive: false),
+      'Moves conversation to another platform',
+      'Moving a conversation to a private messaging group can reduce oversight and increase manipulation risk.',
+      10,
+    ),
+    _Rule(
+      RegExp(r'\b(cnic|aadhaar|passport|id card|identity card|date of birth|dob|bank account|account number)\b', caseSensitive: false),
+      'Requests identity or account information',
+      'Identity and financial details should only be shared after independently verifying the recipient and purpose.',
+      20,
+    ),
+    _Rule(
+      RegExp(r'\b(profit screenshot|proof of profit|members earning|successful withdrawal|withdrawal proof|testimonial)\b', caseSensitive: false),
+      'Social-proof / profit grooming',
+      'Fake testimonials and profit screenshots are commonly used to create false legitimacy.',
+      15,
+    ),
   ];
 
   RiskResult analyze(String input) {
     final text = input.trim();
+    final lower = text.toLowerCase();
     var score = 0;
     final signals = <RiskSignal>[];
 
-    for (final rule in rules) {
+    void addSignal(RiskSignal signal) {
+      if (signals.any((s) => s.title == signal.title)) return;
+      score += signal.points;
+      signals.add(signal);
+    }
+
+    for (final rule in [...hardRules, ...contextRules]) {
       if (rule.regex.hasMatch(text)) {
-        score += rule.points;
-        signals.add(RiskSignal(rule.title, rule.detail, rule.points));
+        addSignal(RiskSignal(rule.title, rule.detail, rule.points));
       }
     }
 
-    final matches = _url.allMatches(text).toList();
-    if (matches.isNotEmpty) {
-      final l = text.toLowerCase();
-      final risky = l.contains('bit.ly') || l.contains('tinyurl') || l.contains('.xyz') || l.contains('.top') || l.contains('.click');
+    final links = _url.allMatches(text).toList();
+    if (links.isNotEmpty) {
+      final risky = lower.contains('bit.ly') ||
+          lower.contains('tinyurl') ||
+          lower.contains('.xyz') ||
+          lower.contains('.top') ||
+          lower.contains('.click') ||
+          lower.contains('t.me/') ||
+          lower.contains('wa.me/');
       final pts = risky ? 24 : 12;
-      score += pts;
-      signals.add(RiskSignal('Contains a link', risky ? 'The message contains a shortened or unusually risky-looking domain.' : 'Verify the exact domain independently before opening it.', pts));
+      addSignal(
+        RiskSignal(
+          'Contains a link',
+          risky
+              ? 'The message contains a shortened, messaging-platform or unusually risky-looking link.'
+              : 'Verify the exact domain independently before opening it.',
+          pts,
+        ),
+      );
+    }
+
+    final hasInternationalNumber =
+        text.contains('+') && _phone.hasMatch(text);
+    if (hasInternationalNumber &&
+        RegExp(
+          r'\b(job|recruit|investment|bank|reply|interested)\b',
+          caseSensitive: false,
+        ).hasMatch(text)) {
+      addSignal(
+        const RiskSignal(
+          'Unknown international contact context',
+          'Unexpected cross-border contact combined with recruitment, finance or engagement language deserves extra verification.',
+          8,
+        ),
+      );
+    }
+
+    final hasRecruitment = RegExp(
+      r'\b(job|recruitment|recruiter|hiring|vacancy|flexible role|part[ -]?time|work from home|online task)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+
+    if (hasRecruitment &&
+        RegExp(
+          r'\b(flexible role|are you interested|would you be interested|may i share|can i share|part[ -]?time)\b',
+          caseSensitive: false,
+        ).hasMatch(text)) {
+      addSignal(
+        const RiskSignal(
+          'Vague recruitment approach',
+          'The sender does not provide enough verifiable job detail before asking you to engage.',
+          10,
+        ),
+      );
+    }
+
+    final bankAlert = RegExp(
+      r'\b(bank|account|card|transaction|debited|withdrawal|payment)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+
+    final replyHook = RegExp(
+      r'\b(reply|respond|type|send)\s+(yes|no|y|n|stop|1|2)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+
+    if (bankAlert && replyHook) {
+      addSignal(
+        const RiskSignal(
+          'Financial alert asks you to engage',
+          'Do not reply directly to an unexpected financial alert. Check the official banking app or verified support channel instead.',
+          18,
+        ),
+      );
+    }
+
+    final investmentTheme = RegExp(
+      r'\b(stock|share market|trading|investment|crypto|forex|profit|returns?)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+
+    final groupTheme = RegExp(
+      r'\b(group|whatsapp|telegram|vip|expert|mentor|analyst)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+
+    if (investmentTheme && groupTheme) {
+      addSignal(
+        const RiskSignal(
+          'Investment grooming pattern',
+          'Investment scams often begin with education, tips or community groups before requesting funds or directing users to a fake platform.',
+          16,
+        ),
+      );
+    }
+
+    if (RegExp(
+      r'\b(sale|offer|discount|promotion|deal|buy now|sell your|best price)\b',
+      caseSensitive: false,
+    ).hasMatch(text) &&
+        signals.isEmpty) {
+      addSignal(
+        const RiskSignal(
+          'Unsolicited promotional message',
+          'This looks commercial rather than fraudulent, but unsolicited contact should still be treated cautiously.',
+          5,
+        ),
+      );
     }
 
     score = score.clamp(0, 100);
-    final level = score >= 55 ? RiskLevel.high : (score >= 25 ? RiskLevel.medium : RiskLevel.low);
-    final lower = text.toLowerCase();
-    String category;
-    if (lower.contains('seed phrase') || lower.contains('private key') || lower.contains('usdt') || lower.contains('crypto')) {
-      category = 'Crypto / investment risk';
-    } else if (lower.contains('job') || lower.contains('work from home') || lower.contains('online task')) {
-      category = 'Job / task scam risk';
-    } else if (lower.contains('bank') || lower.contains('easypaisa') || lower.contains('jazzcash') || lower.contains('otp')) {
-      category = 'Financial impersonation / phishing';
-    } else if (matches.isNotEmpty) {
-      category = 'Phishing / suspicious link';
-    } else if (signals.isNotEmpty) {
-      category = 'Social-engineering risk';
-    } else {
-      category = 'No specific scam pattern identified';
-    }
+
+    final level = score >= 75
+        ? RiskLevel.high
+        : score >= 45
+            ? RiskLevel.suspicious
+            : score >= 15
+                ? RiskLevel.caution
+                : RiskLevel.low;
+
+    final category = _categoryFor(
+      text,
+      links.isNotEmpty,
+      signals,
+    );
 
     final summary = switch (level) {
-      RiskLevel.high => 'Multiple or high-severity scam indicators are present. Treat the message as suspicious until independently verified.',
-      RiskLevel.medium => 'Some warning indicators are present. Verify the sender and request before taking action.',
-      RiskLevel.low => 'Few common scam indicators were detected, but this does not prove the message is legitimate.',
+      RiskLevel.high =>
+        'Strong or multiple scam indicators are present. Avoid engaging or acting on the message until it has been independently verified.',
+      RiskLevel.suspicious =>
+        'Several suspicious behavioral or content signals are present. Avoid replying, clicking or paying until the sender and request are independently verified.',
+      RiskLevel.caution =>
+        'The message is not clearly fraudulent, but it contains patterns that justify caution. Verify the sender before replying or continuing the conversation.',
+      RiskLevel.low =>
+        'No meaningful scam pattern was detected in the supplied text. Stay alert because new scams can begin with harmless-looking contact.',
     };
 
-    final actions = <String>[
-      if (level != RiskLevel.low) 'Do not send money, passwords, PINs, OTPs, recovery phrases or identity documents.',
-      if (matches.isNotEmpty) 'Do not open the link from the message. Find the organization’s official website or app independently.',
-      'Verify the sender using a trusted phone number or official channel.',
-      'If money is involved, independently confirm the recipient and purpose before paying.',
-    ];
+    final actions = _actionsFor(
+      level,
+      links.isNotEmpty,
+      bankAlert,
+      hasRecruitment,
+      investmentTheme,
+      signals,
+    );
 
-    return RiskResult(text: text, score: score, level: level, category: category, summary: summary, signals: signals, actions: actions);
+    return RiskResult(
+      text: text,
+      score: score,
+      level: level,
+      category: category,
+      summary: summary,
+      signals: signals,
+      actions: actions,
+    );
+  }
+
+  String _categoryFor(
+    String text,
+    bool hasLink,
+    List<RiskSignal> signals,
+  ) {
+    if (RegExp(r'\b(seed phrase|private key|wallet|usdt|crypto)\b', caseSensitive: false).hasMatch(text)) {
+      return 'Crypto / investment risk';
+    }
+    if (RegExp(r'\b(job|recruitment|recruiter|hiring|vacancy|work from home|flexible role|online task)\b', caseSensitive: false).hasMatch(text)) {
+      return 'Recruitment / job-contact risk';
+    }
+    if (RegExp(r'\b(stock|trading|investment|forex|guaranteed return)\b', caseSensitive: false).hasMatch(text)) {
+      return 'Investment / trading solicitation';
+    }
+    if (RegExp(r'\b(bank|easypaisa|jazzcash|paypal|account|debited|transaction|otp)\b', caseSensitive: false).hasMatch(text)) {
+      return 'Financial impersonation / phishing risk';
+    }
+    if (signals.any((s) => s.title.contains('family') || s.title.contains('colleague'))) {
+      return 'Impersonation / emergency request';
+    }
+    if (signals.any((s) => s.title.contains('Engagement') || s.title.contains('Conversation hook'))) {
+      return 'Suspicious engagement request';
+    }
+    if (hasLink) return 'Link / phishing risk';
+    if (signals.isNotEmpty) return 'Social-engineering / contextual risk';
+    return 'No specific scam pattern identified';
+  }
+
+  List<String> _actionsFor(
+    RiskLevel level,
+    bool hasLink,
+    bool bankAlert,
+    bool recruitment,
+    bool investment,
+    List<RiskSignal> signals,
+  ) {
+    final actions = <String>[];
+    final hasEngagementSignal = signals.any(
+      (s) =>
+          s.title.contains('Engagement') ||
+          s.title.contains('Conversation hook') ||
+          s.title.contains('Vague recruitment'),
+    );
+
+    if (level != RiskLevel.low || hasEngagementSignal) {
+      actions.add(
+        'Avoid replying until you independently verify who the sender is and why they contacted you.',
+      );
+    }
+    if (bankAlert) {
+      actions.add(
+        'For bank or transaction alerts, open the official banking app or call a verified number yourself. Do not use contact details supplied by the message.',
+      );
+    }
+    if (hasLink) {
+      actions.add(
+        'Do not open the message link until the domain and sender have been independently verified.',
+      );
+    }
+    if (recruitment) {
+      actions.add(
+        'Verify the recruiter, employer, vacancy and official company contact details before sharing documents or continuing.',
+      );
+    }
+    if (investment) {
+      actions.add(
+        'Do not rely on group testimonials, profit screenshots or guaranteed-return claims. Verify the platform and regulator independently.',
+      );
+    }
+    if (level == RiskLevel.suspicious || level == RiskLevel.high) {
+      actions.add(
+        'Do not send money, OTPs, PINs, passwords, identity documents, recovery phrases or remote-access permissions.',
+      );
+    }
+    actions.add(
+      'If the claim involves a person you know, contact them through a previously saved number or another trusted channel.',
+    );
+
+    return actions.toSet().toList();
   }
 }
