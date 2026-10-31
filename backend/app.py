@@ -1,6 +1,5 @@
 """TrustCheck AI backend. Requires authenticated proxy and Azure configuration."""
 import os
-import re
 import httpx
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -25,7 +24,6 @@ async def analyze(request: AnalysisRequest, authorization: str | None = Header(d
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
     deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "")
     api_key = os.getenv("AZURE_OPENAI_API_KEY", "")
-    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
     if not all((endpoint, deployment, api_key)):
         raise HTTPException(status_code=503, detail="AI not configured")
     if not endpoint.startswith("https://"):
@@ -40,34 +38,43 @@ async def analyze(request: AnalysisRequest, authorization: str | None = Header(d
         "Do not flag ordinary financial conversation without behavioral evidence. "
         "Support all languages. Scores are heuristic, not calibrated probabilities."
     )
+    # The Foundry deployment's sample uses the Responses API.
+    # Endpoint and API version must be confirmed with a live private test.
     payload = {
-        "messages": [
-            {"role": "system", "content": instructions},
-            {"role": "user", "content": "Sender (unverified): " + (request.sender or "unknown") + "\nMessage:\n" + request.message},
-        ],
-        "max_completion_tokens": 500,
-        "response_format": {"type": "json_object"},
+        "model": deployment,
+        "instructions": instructions,
+        "input": "Sender (unverified): " + (request.sender or "unknown") +
+                 "\\nMessage:\\n" + request.message,
+        "max_output_tokens": 500,
     }
     try:
-        async with httpx.AsyncClient(timeout=25) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
-                f"{endpoint}/openai/deployments/{deployment}/chat/completions",
-                params={"api-version": api_version},
-                headers={"api-key": api_key},
+                f"{endpoint}/openai/v1/responses",
+                headers={"api-key": api_key, "Content-Type": "application/json"},
                 json=payload,
             )
         response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"]
+        body = response.json()
+        pieces = []
+        for item in body.get("output", []):
+            for part in item.get("content", []):
+                if part.get("type") == "output_text":
+                    pieces.append(part.get("text", ""))
+        raw = "".join(pieces)
         import json
         result = json.loads(raw)
         if not isinstance(result, dict):
             raise ValueError("Invalid response")
         risk = result.get("risk")
-        if not isinstance(risk, int) or not 0 <= risk <= 100:
+        if isinstance(risk, bool) or not isinstance(risk, int) or not 0 <= risk <= 100:
             raise ValueError("Invalid risk")
+        indicators = result.get("indicators", [])
+        if not isinstance(indicators, list):
+            raise ValueError("Invalid indicators")
         return {"risk": risk, "category": str(result.get("category", ""))[:100],
                 "explanation": str(result.get("explanation", ""))[:400],
-                "indicators": [str(x)[:120] for x in result.get("indicators", [])[:8]],
+                "indicators": [str(x)[:120] for x in indicators[:8]],
                 "action": str(result.get("action", ""))[:250],
                 "source": "azure_ai", "sender_verified": False}
     except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
