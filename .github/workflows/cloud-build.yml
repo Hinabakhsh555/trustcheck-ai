@@ -2,7 +2,7 @@ name: TrustCheck Android Cloud Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, release-candidate-v1-2-global ]
   workflow_dispatch:
 
 jobs:
@@ -71,12 +71,5 @@ jobs:
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 14
 
-      - name: Build release AAB
-        run: flutter build appbundle --release
-
-      - name: Upload AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: trustcheck-ai-release-aab
-          path: build/app/outputs/bundle/release/app-release.aab
-          retention-days: 14
+      # Release bundles are intentionally disabled until a private production
+      # upload keystore is configured. Never publish debug-signed bundles.
