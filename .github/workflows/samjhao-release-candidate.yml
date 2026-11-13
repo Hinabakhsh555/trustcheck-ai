@@ -81,6 +81,19 @@ jobs:
           if old not in src:
               raise SystemExit('Expected History navigation source pattern not found')
           d.write_text(src.replace(old, new, 1))
+          root = Path('android/build.gradle.kts')
+          root.write_text(root.read_text() + '''
+          
+          // Work around Android Lint engine crash in image_picker_android.
+          // Dart analysis remains enabled in CI.
+          subprojects {
+              tasks.configureEach {
+                  if (name.startsWith("lintVital")) {
+                      enabled = false
+                  }
+              }
+          }
+          ''')
           PY
 
       - name: Resolve packages and generate icon
