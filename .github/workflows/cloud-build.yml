@@ -69,7 +69,7 @@ jobs:
         with:
           name: trustcheck-ai-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 14
+          retention-days: 30
 
       # Release bundles are intentionally disabled until a private production
       # upload keystore is configured. Never publish debug-signed bundles.
