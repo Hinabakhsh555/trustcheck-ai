@@ -1,0 +1,185 @@
+name: Samjhao AI Release Candidate
+
+on:
+  push:
+    branches: [ samjhao-ai-release ]
+    paths:
+      - 'samjhao_chunks/**'
+      - '.github/workflows/samjhao-release-candidate.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Reassemble and unpack Samjhao source
+        run: |
+          rm -rf /tmp/samjhao /tmp/samjhao.zip /tmp/samjhao_source.b64
+          mkdir -p /tmp/samjhao
+          cat samjhao_chunks/chunk_* > /tmp/samjhao_source.b64
+          base64 -d /tmp/samjhao_source.b64 > /tmp/samjhao.zip
+          unzip -t /tmp/samjhao.zip
+          unzip -q /tmp/samjhao.zip -d /tmp/samjhao
+
+      - name: Generate Android project
+        working-directory: /tmp/samjhao
+        run: |
+          cp pubspec.yaml /tmp/samjhao_pubspec.yaml
+          cp lib/main.dart /tmp/samjhao_main.dart
+          cp -r assets /tmp/samjhao_assets
+          flutter create --platforms=android --org ai.samjhao --project-name samjhao_ai .
+          cp /tmp/samjhao_pubspec.yaml pubspec.yaml
+          cp /tmp/samjhao_main.dart lib/main.dart
+          rm -rf assets
+          cp -r /tmp/samjhao_assets assets
+          rm -f test/widget_test.dart
+
+      - name: Configure app and fix source
+        working-directory: /tmp/samjhao
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle.kts')
+          s = p.read_text()
+          s = s.replace('namespace = "ai.samjhao.samjhao_ai"', 'namespace = "ai.samjhao.app"')
+          s = s.replace('applicationId = "ai.samjhao.samjhao_ai"', 'applicationId = "ai.samjhao.app"')
+          s = s.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
+          s = s.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
+          s = s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          marker = 'signingConfig = signingConfigs.getByName("debug")'
+          if marker in s and 'isMinifyEnabled = false' not in s:
+              s = s.replace(marker, marker + '\n            isMinifyEnabled = false\n            isShrinkResources = false')
+          p.write_text(s)
+
+          m = Path('android/app/src/main/AndroidManifest.xml')
+          t = m.read_text()
+          t = t.replace('android:label="samjhao_ai"', 'android:label="Samjhao AI"')
+          if 'android.permission.INTERNET' not in t:
+              t = t.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>')
+          m.write_text(t)
+
+          d = Path('lib/main.dart')
+          src = d.read_text()
+          old = 'onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ResultScreen(result: r)))))),'
+          new = 'onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ResultScreen(result: r))))))),'
+          if old not in src:
+              raise SystemExit('Expected History navigation source pattern not found')
+          d.write_text(src.replace(old, new, 1))
+          PY
+
+      - name: Resolve packages and generate icon
+        working-directory: /tmp/samjhao
+        run: |
+          flutter pub get
+          dart run flutter_launcher_icons
+
+      - name: Static analysis
+        working-directory: /tmp/samjhao
+        run: flutter analyze --no-fatal-infos
+
+      - name: Build test APK
+        working-directory: /tmp/samjhao
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: flutter build apk --release --dart-define="API_BASE_URL=$API_BASE_URL"
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          cp /tmp/samjhao/build/app/outputs/flutter-apk/app-release.apk dist/Samjhao_AI_v1.0.0_TEST.apk
+          cp /tmp/samjhao.zip dist/Samjhao_AI_v1.0.0_Source.zip
+          cp /tmp/samjhao/README.md dist/README.txt
+          sha256sum dist/* > dist/SHA256SUMS.txt
+
+      - name: Upload final build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Samjhao-AI-v1.0.0-TEST-APK
+          path: dist/
+          retention-days: 30
+
+      - name: Check prerequisites for signed Play bundle
+        id: production
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [[ "$API_BASE_URL" == https://* && -n "$ANDROID_KEYSTORE_BASE64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_PASSWORD" && -n "$ANDROID_KEY_ALIAS" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Production signing prerequisites present."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Release bundle skipped: HTTPS backend URL and/or signing secrets are missing."
+          fi
+
+      - name: Configure upload key signing
+        if: steps.production.outputs.ready == 'true'
+        working-directory: /tmp/samjhao
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/samjhao-upload.jks
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle.kts')
+          s = p.read_text()
+          needle = 'android {'
+          signing = '''android {
+              signingConfigs {
+                  create("release") {
+                      storeFile = file("samjhao-upload.jks")
+                      storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                      keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                      keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                  }
+              }
+          '''
+          assert needle in s and 'signingConfig = signingConfigs.getByName("debug")' in s
+          s = s.replace(needle, signing, 1).replace('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("release")', 1)
+          p.write_text(s)
+          PY
+
+      - name: Build and verify signed Play AAB
+        if: steps.production.outputs.ready == 'true'
+        working-directory: /tmp/samjhao
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          flutter build appbundle --release --dart-define="API_BASE_URL=$API_BASE_URL"
+          jarsigner -verify build/app/outputs/bundle/release/app-release.aab
+          mkdir -p "$GITHUB_WORKSPACE/play"
+          cp build/app/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/play/Samjhao_AI_v1.0.0_PLAY_SIGNED.aab"
+          sha256sum "$GITHUB_WORKSPACE/play/"*.aab > "$GITHUB_WORKSPACE/play/SHA256SUMS.txt"
+
+      - name: Upload signed Play AAB
+        if: steps.production.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Samjhao-AI-v1.0.0-PLAY-SIGNED-AAB
+          path: play/
+          retention-days: 30
