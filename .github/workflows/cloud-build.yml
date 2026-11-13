@@ -3,6 +3,11 @@ name: TrustCheck Android Cloud Build
 on:
   push:
     branches: [ main, release-candidate-v1-2-global ]
+    paths:
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'ci/**'
+      - '.github/workflows/cloud-build.yml'
   workflow_dispatch:
 
 jobs:
